@@ -1,0 +1,54 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: 'audicore-storage-api'  # Nome do seu App Service
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create deployment package
+      run: |
+        # Copiar apenas os arquivos necessários
+        mkdir -p deploy
+        cp -r src/* deploy/
+        cp requirements.txt deploy/
+
+        # Criar arquivo startup.txt para Azure
+        echo "gunicorn --bind=0.0.0.0 --timeout 600 api_storage_routes:app" > deploy/startup.txt
+
+        cd deploy
+        zip -r ../deploy.zip .
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: deploy.zip
+
+    - name: Clean up
+      run: |
+        rm -rf deploy deploy.zip
